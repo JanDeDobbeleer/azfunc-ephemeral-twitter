@@ -184,7 +184,7 @@ func TestGetRepliesForTweetSearchError(t *testing.T) {
 	assert.Len(t, replies, 0)
 }
 
-func getHasOngoingInteractions(hasActiveInteractions bool, useValidDates bool) bool {
+func getHasOngoingInteractions(hasActiveInteractions, useValidDates bool) bool {
 	shouldMatch := rand.Intn(200)
 	shouldNotMatch := rand.Intn(200)
 	tweetID := rand.Int63()

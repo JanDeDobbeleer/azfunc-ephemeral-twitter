@@ -31,12 +31,6 @@ type TwitterAPIClient interface {
 	DeleteTweet(id int64, trimUser bool) (tweet anaconda.Tweet, err error)
 }
 
-// MyResponse for AWS SAM
-type MyResponse struct {
-	StatusCode string `json:"StatusCode"`
-	Message    string `json:"Body"`
-}
-
 func setVariables() {
 	consumerKey = getenv("TWITTER_CONSUMER_KEY")
 	consumerSecret = getenv("TWITTER_CONSUMER_SECRET")
@@ -87,9 +81,9 @@ func getRepliesForTweet(api TwitterAPIClient, tweetID int64) []anaconda.Tweet {
 		return make([]anaconda.Tweet, 0)
 	}
 	replies := searchResponse.Statuses[:0]
-	for _, tweet := range searchResponse.Statuses {
-		if tweet.InReplyToStatusID == tweetID {
-			replies = append(replies, tweet)
+	for i := range searchResponse.Statuses {
+		if searchResponse.Statuses[i].InReplyToStatusID == tweetID {
+			replies = append(replies, searchResponse.Statuses[i])
 		}
 	}
 	return replies
@@ -108,8 +102,8 @@ func isWhitelisted(id int64) bool {
 
 func hasOngoingInteractions(api TwitterAPIClient, tweetID int64, interactionAgeLimit time.Duration) bool {
 	replies := getRepliesForTweet(api, tweetID)
-	for _, reply := range replies {
-		createdTime, err := reply.CreatedAtTime()
+	for i := range replies {
+		createdTime, err := replies[i].CreatedAtTime()
 		if err != nil {
 			log.Print("Could not parse time ", err)
 			continue
@@ -122,24 +116,25 @@ func hasOngoingInteractions(api TwitterAPIClient, tweetID int64, interactionAgeL
 	return false
 }
 
-func deleteFromTimeline(api TwitterAPIClient, tweetAgeLimit time.Duration, interactionAgeLimit time.Duration) {
+func deleteFromTimeline(api TwitterAPIClient, tweetAgeLimit, interactionAgeLimit time.Duration) {
 	log.Print("Start deleting tweets")
 	timeline, err := getTimeline(api)
 	if err != nil {
 		log.Print("Could not get timeline ", err)
 	}
-	for _, t := range timeline {
-		createdTime, err := t.CreatedAtTime()
+	for i := range timeline {
+		tweet := timeline[i]
+		createdTime, err := tweet.CreatedAtTime()
 		if err != nil {
 			log.Print("Could not parse time ", err)
-		} else {
-			if time.Since(createdTime) > tweetAgeLimit && !isWhitelisted(t.Id) && !hasOngoingInteractions(api, t.Id, interactionAgeLimit) {
-				_, err := api.DeleteTweet(t.Id, true)
-				log.Print("DELETED ID ", t.Id)
-				log.Print("TWEET ", createdTime, " - ", t.Text)
-				if err != nil {
-					log.Print("Failed to delete: ", err)
-				}
+			continue
+		}
+		if time.Since(createdTime) > tweetAgeLimit && !isWhitelisted(tweet.Id) && !hasOngoingInteractions(api, tweet.Id, interactionAgeLimit) {
+			_, err := api.DeleteTweet(tweet.Id, true)
+			log.Print("DELETED TWEET WITH ID ", tweet.Id)
+			log.Print("TWEET ", createdTime, " - ", tweet.Text)
+			if err != nil {
+				log.Print("Failed to delete: ", err)
 			}
 		}
 	}
